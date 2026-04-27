@@ -1,80 +1,63 @@
-import axios from 'axios'
+import axios from "axios";
+import {
+  FETCH_HEADERS,
+  FETCH_TIMEOUT_MS,
+  DEFAULT_DELAY_MS,
+  ISU_MODERN_DOMAIN,
+  ISU_LEGACY_DOMAIN,
+  MODERN_CUTOFF_YEAR,
+} from "./constants";
 
-const HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Accept': 'application/pdf,*/*',
-  'Accept-Language': 'en-US,en;q=0.9',
-  'Accept-Encoding': 'gzip, deflate, br',
-  'Connection': 'keep-alive',
-  'Referer': 'https://results.isu.org/',
-}
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Delay helper — waits between requests so we don't get blocked
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+const buildPdfUrl = (season: string, eventCode: string): string => {
+  const startYear = parseInt(season.slice(0, 2));
+  const fullYear = startYear >= 50 ? 1900 + startYear : 2000 + startYear;
+  const domain =
+    fullYear < MODERN_CUTOFF_YEAR ? ISU_LEGACY_DOMAIN : ISU_MODERN_DOMAIN;
+  return `https://${domain}/results/season${season}/${eventCode}/${eventCode}_protocol.pdf`;
+};
 
-// Builds the correct URL based on season year
-// Pre-2018 seasons use isuresults.com, 2018 onwards use results.isu.org
-function buildPdfUrl(season: string, eventCode: string): string {
-  const startYear = parseInt(season.slice(0, 2))
-  const fullYear = startYear >= 18 ? 2000 + startYear : 1900 + startYear
-
-  if (fullYear < 2018) {
-    return `https://www.isuresults.com/results/season${season}/${eventCode}/${eventCode}_protocol.pdf`
-  }
-  return `https://results.isu.org/results/season${season}/${eventCode}/${eventCode}_protocol.pdf`
-}
-
-// Fetches a single PDF and returns it as a Buffer
-async function fetchPdf(season: string, eventCode: string): Promise<Buffer | null> {
-  const url = buildPdfUrl(season, eventCode)
-  console.log(`Fetching: ${url}`)
+export const fetchPdf = async (
+  season: string,
+  eventCode: string,
+): Promise<Buffer | null> => {
+  const url = buildPdfUrl(season, eventCode);
+  console.log(`Fetching: ${url}`);
 
   try {
     const response = await axios.get(url, {
-      headers: HEADERS,
-      responseType: 'arraybuffer',
-      timeout: 30000,
-    })
-
-    console.log(`Successfully fetched ${eventCode} (${response.data.byteLength} bytes)`)
-    return Buffer.from(response.data)
-
+      headers: FETCH_HEADERS,
+      responseType: "arraybuffer",
+      timeout: FETCH_TIMEOUT_MS,
+    });
+    console.log(
+      `Successfully fetched ${eventCode} (${response.data.byteLength} bytes)`,
+    );
+    return Buffer.from(response.data);
   } catch (error: any) {
-    if (error.response?.status === 404) {
-      console.log(`Not found (404): ${eventCode} — skipping`)
-      return null
-    }
-    if (error.response?.status === 403) {
-      console.log(`Blocked (403): ${eventCode} — skipping`)
-      return null
-    }
-    console.error(`Error fetching ${eventCode}: ${error.message}`)
-    return null
+    const status = error.response?.status;
+    if (status === 404) console.log(`Not found (404): ${eventCode}`);
+    else if (status === 403) console.log(`Blocked (403): ${eventCode}`);
+    else console.error(`Error fetching ${eventCode}: ${error.message}`);
+    return null;
   }
-}
+};
 
-// Fetches multiple PDFs with a delay between each request
-export async function fetchMultiplePdfs(
+export const fetchMultiplePdfs = async (
   events: { season: string; eventCode: string }[],
-  delayMs: number = 3000
-): Promise<{ eventCode: string; buffer: Buffer }[]> {
-  const results: { eventCode: string; buffer: Buffer }[] = []
+  delayMs: number = DEFAULT_DELAY_MS,
+): Promise<{ eventCode: string; buffer: Buffer }[]> => {
+  const results: { eventCode: string; buffer: Buffer }[] = [];
 
-  for (const event of events) {
-    const buffer = await fetchPdf(event.season, event.eventCode)
-
-    if (buffer) {
-      results.push({ eventCode: event.eventCode, buffer })
-    }
-
-    // Wait between requests to avoid triggering rate limiting
-    if (events.indexOf(event) < events.length - 1) {
-      console.log(`Waiting ${delayMs}ms before next request...`)
-      await delay(delayMs)
+  for (let i = 0; i < events.length; i++) {
+    const buffer = await fetchPdf(events[i].season, events[i].eventCode);
+    if (buffer) results.push({ eventCode: events[i].eventCode, buffer });
+    if (i < events.length - 1) {
+      console.log(`Waiting ${delayMs}ms...`);
+      await delay(delayMs);
     }
   }
 
-  return results
-}
-
-export { fetchPdf }
+  return results;
+};

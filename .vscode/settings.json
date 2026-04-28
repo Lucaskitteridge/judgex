@@ -1,4 +1,5 @@
 {
   "workbench.colorTheme": "Visual Studio Dark",
-  "editor.wordWrap": "on"
+  "editor.wordWrap": "on",
+  "css.lint.unknownAtRules": "ignore"
 }

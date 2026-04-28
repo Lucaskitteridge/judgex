@@ -1,12 +1,5 @@
 import axios from 'axios'
-import {
-  FETCH_HEADERS,
-  FETCH_TIMEOUT_MS,
-  DEFAULT_DELAY_MS,
-  ISU_MODERN_DOMAIN,
-  ISU_LEGACY_DOMAIN,
-  MODERN_CUTOFF_YEAR,
-} from './constants'
+import { FETCH_HEADERS, FETCH_TIMEOUT_MS, DEFAULT_DELAY_MS, ISU_MODERN_DOMAIN, ISU_LEGACY_DOMAIN, MODERN_CUTOFF_YEAR } from './constants'
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -29,11 +22,15 @@ export const fetchPdf = async (season: string, eventCode: string): Promise<Buffe
     })
     console.log(`Successfully fetched ${eventCode} (${response.data.byteLength} bytes)`)
     return Buffer.from(response.data)
-  } catch (error: any) {
-    const status = error.response?.status
-    if (status === 404) console.log(`Not found (404): ${eventCode}`)
-    else if (status === 403) console.log(`Blocked (403): ${eventCode}`)
-    else console.error(`Error fetching ${eventCode}: ${error.message}`)
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status
+      if (status === 404) console.log(`Not found (404): ${eventCode}`)
+      else if (status === 403) console.log(`Blocked (403): ${eventCode}`)
+      else console.error(`Error fetching ${eventCode}: ${error.message}`)
+    } else {
+      console.error(`Unexpected error fetching ${eventCode}:`, error)
+    }
     return null
   }
 }

@@ -2,16 +2,7 @@ import pdfParse from 'pdf-parse'
 import { DISCIPLINE_MAP, SEGMENT_MAP } from './constants'
 import { calculateJudgeDeviations } from './calculator'
 import type { JudgePanel, SkaterMark, ParsedProtocol } from './types'
-
-const TITLE_CASE_REGEX = /(?:^|\s|\/)\S/g
-
-const cleanName = (raw: string): string => raw.replace(/\n/g, '').replace(/\s+/g, ' ').trim()
-
-const toTitleCase = (str: string): string =>
-  str
-    .toLowerCase()
-    .replace(TITLE_CASE_REGEX, char => char.toUpperCase())
-    .trim()
+import { cleanName, toTitleCase } from './utils'
 
 // Extracts 9 judge GOE scores from a jammed element row by working
 // backwards from the panel score at the end of the line

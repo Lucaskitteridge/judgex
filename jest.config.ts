@@ -1,6 +1,9 @@
 import type { Config } from 'jest'
+import { config } from 'dotenv'
 
-const config: Config = {
+config({ path: '.env.local' })
+
+const jestConfig: Config = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   testMatch: ['**/__tests__/**/*.test.ts'],
@@ -10,4 +13,4 @@ const config: Config = {
   silent: true,
 }
 
-export default config
+export default jestConfig

@@ -1,6 +1,11 @@
 export type Discipline = 'mens' | 'womens' | 'pairs' | 'ice_dance'
 export type Segment = 'SP' | 'FS'
 
+export interface JudgeDeviation {
+  position: number
+  deviation: number
+}
+
 export interface JudgePanel {
   discipline: Discipline
   segment: Segment
@@ -17,13 +22,21 @@ export interface SkaterMark {
   skaterNationality: string
   discipline: Discipline
   segment: Segment
-  judgeDeviations: {
-    position: number
-    deviation: number
-  }[]
+  judgeDeviations: JudgeDeviation[]
 }
 
 export interface ParsedProtocol {
   panels: JudgePanel[]
   marks: SkaterMark[]
+}
+
+export interface JudgeAggregate {
+  avgDeviation: number
+  avgAbsoluteDeviation: number
+  totalMarks: number
+}
+
+export interface SkaterSeasonAggregate {
+  avgDeviationReceived: number
+  totalMarks: number
 }

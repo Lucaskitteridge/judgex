@@ -1,13 +1,16 @@
 import pdfParse from 'pdf-parse'
 import { DISCIPLINE_MAP, SEGMENT_MAP } from './constants'
+import { calculateJudgeDeviations } from './calculator'
 import type { JudgePanel, SkaterMark, ParsedProtocol } from './types'
+
+const TITLE_CASE_REGEX = /(?:^|\s|\/)\S/g
 
 const cleanName = (raw: string): string => raw.replace(/\n/g, '').replace(/\s+/g, ' ').trim()
 
 const toTitleCase = (str: string): string =>
   str
     .toLowerCase()
-    .replace(/(?:^|\s|\/)\S/g, char => char.toUpperCase())
+    .replace(TITLE_CASE_REGEX, char => char.toUpperCase())
     .trim()
 
 // Extracts 9 judge GOE scores from a jammed element row by working
@@ -143,20 +146,12 @@ const parseMarks = (text: string, panels: JudgePanel[]): SkaterMark[] => {
 
       if (perJudgeScores[0].length === 0) continue
 
-      const judgeAverages = perJudgeScores.map(scores => scores.reduce((sum, s) => sum + s, 0) / scores.length)
-      const panelAverage = judgeAverages.reduce((sum, a) => sum + a, 0) / judgeAverages.length
-
-      const judgeDeviations = judgeAverages.map((avg, i) => ({
-        position: i + 1,
-        deviation: parseFloat((avg - panelAverage).toFixed(3)),
-      }))
-
       marks.push({
         skaterName,
         skaterNationality,
         discipline,
         segment,
-        judgeDeviations,
+        judgeDeviations: calculateJudgeDeviations(perJudgeScores),
       })
     }
   }

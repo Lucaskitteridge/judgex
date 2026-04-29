@@ -4,45 +4,40 @@ import { calculateJudgeDeviations } from './calculator'
 import type { JudgePanel, SkaterMark, ParsedProtocol } from './types'
 import { cleanName, toTitleCase } from './utils'
 
-// Extracts 9 judge GOE scores from a jammed element row by working
-// backwards from the panel score at the end of the line
 const parseElementLine = (line: string): number[] | null => {
   const trimmed = line.trim()
   if (!/^\d+\s+/.test(trimmed)) return null
   if (/^(Composition|Presentation|Skating Skills)/.test(trimmed)) return null
+  if (/^\d+\s+[A-Z][a-z]+\s/.test(trimmed)) return null
 
-  const panelMatch = trimmed.match(/(\d{1,2}\.\d{2})$/)
-  if (!panelMatch) return null
+  // Match: baseValue(X.XX) + GOE(±X.XX, exactly 1 digit before decimal) + 9 judge scores + panelScore
+  const match = trimmed.match(/\d+\.\d{2}(-?\d\.\d{2})((?:-?\d){9})\d+\.\d{2}$/)
+  if (!match) return null
 
-  const beforePanel = trimmed.slice(0, trimmed.length - panelMatch[0].length)
+  const scoreMatches = match[2].match(/-?\d/g)
+  if (!scoreMatches || scoreMatches.length !== 9) return null
 
-  // Walk backwards through the string collecting single digit judge scores
-  // Stop when we hit a non-digit non-space character (GOE value boundary)
-  const chars = beforePanel.split('')
-  const scores: number[] = []
-  let i = chars.length - 1
-
-  while (i >= 0 && scores.length < 9) {
-    if (chars[i] >= '0' && chars[i] <= '9') {
-      if (i > 0 && chars[i - 1] === '-') {
-        scores.unshift(-parseInt(chars[i]))
-        i -= 2
-      } else {
-        scores.unshift(parseInt(chars[i]))
-        i--
-      }
-    } else if (chars[i] === ' ') {
-      i--
-    } else {
-      break
-    }
-  }
-
-  if (scores.length !== 9) return null
-  // GOE scores are capped at -5 to +5 by ISU rules
+  const scores = scoreMatches.map(Number)
   if (scores.some(s => s < -5 || s > 5)) return null
 
   return scores
+}
+
+// Extracts 9 judge PCS scores from a component row
+const parsePcsLine = (line: string): number[] | null => {
+  const trimmed = line.trim()
+  if (!/^(Composition|Presentation|Skating Skills)/.test(trimmed)) return null
+
+  const withoutName = trimmed.replace(/^(Composition|Presentation|Skating Skills)/, '')
+  const allDecimals = withoutName.match(/\d+\.\d{2}/g)
+  if (!allDecimals || allDecimals.length < 11) return null
+
+  // Structure: factor(1), judge scores(9), panel average(1) = 11 numbers
+  const judgeScores = allDecimals.slice(1, 10).map(Number)
+  if (judgeScores.length !== 9) return null
+  if (judgeScores.some(s => s < 0 || s > 10)) return null
+
+  return judgeScores
 }
 
 const parsePanels = (text: string): JudgePanel[] => {
@@ -98,6 +93,8 @@ const parseMarks = (text: string, panels: JudgePanel[]): SkaterMark[] => {
   const detailSections = text.split('JUDGES DETAILS PER SKATER')
   detailSections.shift()
 
+  const processed = new Set<string>()
+
   for (const section of detailSections) {
     const headerMatch = section.match(/(PAIRS|MEN|WOMEN|ICE DANCE)\s+(SHORT PROGRAM|FREE SKATING|RHYTHM DANCE|FREE DANCE)/)
     if (!headerMatch) continue
@@ -107,9 +104,8 @@ const parseMarks = (text: string, panels: JudgePanel[]): SkaterMark[] => {
     const panel = panels.find(p => p.discipline === discipline && p.segment === segment)
     if (!panel) continue
 
-    // Must use let — RegExp.exec with /g flag mutates regex state between calls
     let skaterMatch
-    const skaterStartRegex = /\n\d+\s+[A-Z][a-z]+(?:\s+[A-Z]|\s*\/)/g
+    const skaterStartRegex = /\n\d+\s+[A-Z][a-z]{2,}(?:\s+[A-Z]|\s*\/)/g
     const skaterStartPositions: number[] = []
 
     while ((skaterMatch = skaterStartRegex.exec(section)) !== null) {
@@ -124,25 +120,43 @@ const parseMarks = (text: string, panels: JudgePanel[]): SkaterMark[] => {
 
       const skaterName = toTitleCase(cleanName(nameMatch[1]))
       const skaterNationality = nameMatch[2]
-      const perJudgeScores: number[][] = Array.from({ length: 9 }, () => [])
 
-      for (const line of skaterBlock.split('\n')) {
+      const key = `${skaterName}|${discipline}|${segment}`
+      if (processed.has(key)) continue
+      processed.add(key)
+
+      const perJudgeScores: number[][] = Array.from({ length: 9 }, () => [])
+      const perJudgePcsScores: number[][] = Array.from({ length: 9 }, () => [])
+
+      // Rejoin PCS lines split across lines by the PDF extractor
+      const processedBlock = skaterBlock.replace(/(Composition|Presentation|Skating Skills)\n(\d)/g, '$1$2')
+
+      for (const line of processedBlock.split('\n')) {
         const elementScores = parseElementLine(line)
+
         if (elementScores) {
           for (let j = 0; j < 9; j++) {
             perJudgeScores[j].push(elementScores[j])
           }
         }
+
+        const pcsScores = parsePcsLine(line)
+        if (pcsScores) {
+          for (let j = 0; j < 9; j++) {
+            perJudgePcsScores[j].push(pcsScores[j])
+          }
+        }
       }
 
       if (perJudgeScores[0].length === 0) continue
+      if (perJudgePcsScores[0].length === 0) continue
 
       marks.push({
         skaterName,
         skaterNationality,
         discipline,
         segment,
-        judgeDeviations: calculateJudgeDeviations(perJudgeScores),
+        judgeDeviations: calculateJudgeDeviations(perJudgeScores, perJudgePcsScores),
       })
     }
   }

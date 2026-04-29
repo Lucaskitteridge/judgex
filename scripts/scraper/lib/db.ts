@@ -61,7 +61,10 @@ const insertMarksBatch = async (
     judge_id: string
     skater_id: string
     segment: string
-    deviation: number
+    element_deviation: number
+    element_raw_score: number
+    pcs_deviation: number
+    pcs_raw_score: number
   }[]
 ): Promise<void> => {
   const { error } = await supabaseAdmin.from('marks').insert(marks)
@@ -75,28 +78,35 @@ const updateSeenCompetitionsBatch = async (table: 'judges' | 'skaters', ids: str
 }
 
 const recalculateJudgeAggregates = async (judgeId: string) => {
-  const { data: marks } = await supabaseAdmin.from('marks').select('deviation, skaters(nationality)').eq('judge_id', judgeId)
+  const { data: marks } = await supabaseAdmin
+    .from('marks')
+    .select('element_deviation, pcs_deviation, skater_id, skaters(nationality)')
+    .eq('judge_id', judgeId)
 
   if (!marks || marks.length === 0) return
 
-  const byNationality: Record<string, number[]> = {}
+  const byNationality: Record<string, { elementDevs: number[]; pcsDevs: number[] }> = {}
+
   for (const mark of marks) {
     const nat = (mark.skaters as any)?.nationality
     if (!nat) continue
-    if (!byNationality[nat]) byNationality[nat] = []
-    byNationality[nat].push(mark.deviation)
+    if (!byNationality[nat]) byNationality[nat] = { elementDevs: [], pcsDevs: [] }
+    byNationality[nat].elementDevs.push(Number(mark.element_deviation))
+    byNationality[nat].pcsDevs.push(Number(mark.pcs_deviation))
   }
 
-  for (const [nationality, deviations] of Object.entries(byNationality)) {
-    const aggregate = calculateJudgeAggregate(deviations)
+  for (const [nationality, { elementDevs, pcsDevs }] of Object.entries(byNationality)) {
+    const aggregate = calculateJudgeAggregate(elementDevs, pcsDevs)
     await supabaseAdmin.from('judge_aggregates').upsert(
       {
         judge_id: judgeId,
         vs_nationality: nationality,
-        avg_deviation: aggregate.avgDeviation,
-        avg_absolute_deviation: aggregate.avgAbsoluteDeviation,
+        avg_element_deviation: aggregate.avgElementDeviation,
+        avg_element_absolute_deviation: aggregate.avgElementAbsoluteDeviation,
+        avg_pcs_deviation: aggregate.avgPcsDeviation,
+        avg_pcs_absolute_deviation: aggregate.avgPcsAbsoluteDeviation,
         total_marks: aggregate.totalMarks,
-        skater_count: new Set(marks.filter(m => (m.skaters as any)?.nationality === nationality).map(m => m.skaters)).size,
+        skater_count: new Set(marks.filter(m => (m.skaters as any)?.nationality === nationality).map(m => m.skater_id)).size,
       },
       { onConflict: 'judge_id,vs_nationality' }
     )
@@ -104,25 +114,31 @@ const recalculateJudgeAggregates = async (judgeId: string) => {
 }
 
 const recalculateSkaterSeasonAggregates = async (skaterId: string) => {
-  const { data: marks } = await supabaseAdmin.from('marks').select('deviation, competitions(season)').eq('skater_id', skaterId)
+  const { data: marks } = await supabaseAdmin
+    .from('marks')
+    .select('element_deviation, pcs_deviation, competitions(season)')
+    .eq('skater_id', skaterId)
 
   if (!marks || marks.length === 0) return
 
-  const bySeason: Record<string, number[]> = {}
+  const bySeason: Record<string, { elementDevs: number[]; pcsDevs: number[] }> = {}
+
   for (const mark of marks) {
     const season = (mark.competitions as any)?.season
     if (!season) continue
-    if (!bySeason[season]) bySeason[season] = []
-    bySeason[season].push(mark.deviation)
+    if (!bySeason[season]) bySeason[season] = { elementDevs: [], pcsDevs: [] }
+    bySeason[season].elementDevs.push(Number(mark.element_deviation))
+    bySeason[season].pcsDevs.push(Number(mark.pcs_deviation))
   }
 
-  for (const [season, deviations] of Object.entries(bySeason)) {
-    const aggregate = calculateSkaterSeasonAggregate(deviations)
+  for (const [season, { elementDevs, pcsDevs }] of Object.entries(bySeason)) {
+    const aggregate = calculateSkaterSeasonAggregate(elementDevs, pcsDevs)
     await supabaseAdmin.from('skater_season_aggregates').upsert(
       {
         skater_id: skaterId,
         season,
-        avg_deviation_received: aggregate.avgDeviationReceived,
+        avg_element_deviation_received: aggregate.avgElementDeviationReceived,
+        avg_pcs_deviation_received: aggregate.avgPcsDeviationReceived,
         total_marks: aggregate.totalMarks,
       },
       { onConflict: 'skater_id,season' }
@@ -177,7 +193,10 @@ export const insertProtocol = async (
     judge_id: string
     skater_id: string
     segment: string
-    deviation: number
+    element_deviation: number
+    element_raw_score: number
+    pcs_deviation: number
+    pcs_raw_score: number
   }[] = []
 
   for (const mark of protocol.marks) {
@@ -199,7 +218,10 @@ export const insertProtocol = async (
         judge_id: judgeId,
         skater_id: skaterId,
         segment: mark.segment,
-        deviation: deviation.deviation,
+        element_deviation: deviation.elementDeviation,
+        element_raw_score: deviation.elementRawScore,
+        pcs_deviation: deviation.pcsDeviation,
+        pcs_raw_score: deviation.pcsRawScore,
       })
     }
   }

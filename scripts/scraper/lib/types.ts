@@ -1,11 +1,6 @@
 export type Discipline = 'mens' | 'womens' | 'pairs' | 'ice_dance'
 export type Segment = 'SP' | 'FS'
 
-export interface JudgeDeviation {
-  position: number
-  deviation: number
-}
-
 export interface JudgePanel {
   discipline: Discipline
   segment: Segment
@@ -31,12 +26,23 @@ export interface ParsedProtocol {
 }
 
 export interface JudgeAggregate {
-  avgDeviation: number
-  avgAbsoluteDeviation: number
+  avgElementDeviation: number
+  avgElementAbsoluteDeviation: number
+  avgPcsDeviation: number
+  avgPcsAbsoluteDeviation: number
   totalMarks: number
 }
 
 export interface SkaterSeasonAggregate {
-  avgDeviationReceived: number
+  avgElementDeviationReceived: number
+  avgPcsDeviationReceived: number
   totalMarks: number
+}
+
+export interface JudgeDeviation {
+  position: number
+  elementDeviation: number
+  elementRawScore: number
+  pcsDeviation: number
+  pcsRawScore: number
 }

@@ -1,7 +1,7 @@
 import type { Config } from 'jest'
 import { config } from 'dotenv'
 
-config({ path: '.env.local' })
+config({ path: '.env.test' })
 
 const jestConfig: Config = {
   preset: 'ts-jest',

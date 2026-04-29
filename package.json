@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "jest",
+    "db:seed": "ts-node scripts/scraper/seed.ts",
+    "db:backfill": "ts-node scripts/scraper/run.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.104.1",

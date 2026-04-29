@@ -29,7 +29,7 @@ describe('parseProtocol', () => {
     const buffer = await fetchPdf('2425', 'gpusa2024')
     expect(buffer).not.toBeNull()
 
-    const result = await parseProtocol(buffer!)
+    const result = await parseProtocol(buffer!, '2425')
 
     expect(result.panels.length).toBe(8)
     expect(result.panels[0].judges.length).toBe(9)
@@ -40,7 +40,7 @@ describe('parseProtocol', () => {
     const buffer = await fetchPdf('2425', 'gpusa2024')
     expect(buffer).not.toBeNull()
 
-    const result = await parseProtocol(buffer!)
+    const result = await parseProtocol(buffer!, '2425')
 
     expect(result.marks.length).toBe(82)
     expect(result.marks[0].judgeDeviations.length).toBe(9)
@@ -65,7 +65,7 @@ describe('parseProtocol', () => {
 
   it('verifies deviation math against known element', async () => {
     const buffer = await fetchPdf('2425', 'gpusa2024')
-    const result = await parseProtocol(buffer!)
+    const result = await parseProtocol(buffer!, '2425')
 
     const miura = result.marks.find(m => m.skaterName.includes('Miura') && m.segment === 'SP')
     expect(miura).toBeDefined()
@@ -82,4 +82,25 @@ describe('parseProtocol', () => {
     const pcsSum = miura!.judgeDeviations.reduce((s, j) => s + j.pcsDeviation, 0)
     expect(Math.abs(pcsSum)).toBeLessThan(0.01)
   }, 30000)
+
+  it('inspects raw text across seasons', async () => {
+    const seasons = [
+      { season: '2324', code: 'gpusa2023' },
+      { season: '2223', code: 'gpusa2022' },
+      { season: '2122', code: 'gpusa2021' },
+      { season: '1920', code: 'gpusa2019' },
+    ]
+
+    for (const { season, code } of seasons) {
+      const buffer = await fetchPdf(season, code)
+      if (!buffer) {
+        console.log(`${season}: fetch failed`)
+        continue
+      }
+
+      const result = await parseProtocol(buffer, season)
+      console.log(`${season}: panels=${result.panels.length} marks=${result.marks.length}`)
+    }
+  }, 120000)
+
 })
